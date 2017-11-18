@@ -124,14 +124,12 @@ startss() {
 		echo "> WARNING: SS_ENCRYPT_METHOD is required"
 	fi
 	`nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
-	echo "> shadowsocks started"
 }
 
 stopss() {
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
 		kill $SS_PID
-		echo "> shadowsocks stopped"
 	fi
 }
 
@@ -183,13 +181,11 @@ setssmode() {
 	resetsschain $ss_rule_name
 	iptables -t nat -A $ss_rule_name -p tcp -m set --match-set $SS_IPSET_NAME dst -j REDIRECT --to-port $SS_LOCAL_PORT
 	`savesession ss_rule $ss_rule_name`
-	echo "> shadowsocks mode: $1"
 	;;
 	global)
 	resetsschain $ss_rule_name
 	iptables -t nat -A $ss_rule_name -p tcp -j REDIRECT --to-port $SS_LOCAL_PORT
 	`savesession ss_rule $ss_rule_name`
-	echo "> shadowsocks mode: $1"
 	;;
 	*)
 	echo "> WARNING: unrecognized shadowsocks mode: $1"
@@ -219,9 +215,10 @@ routerstart() {
 		exit 0
 	fi
 
-	echo -n "> starting ... "
+	echo "> starting ..."
 
 	# stop exist process
+	echo "> stopping old process ..."
 	stopservice dnsmasq
 	stopservice hostapd
 	stopss
@@ -229,13 +226,17 @@ routerstart() {
 	stopwpasupplicant
 
 	# create bridge
+	echo "> creating bridge ..."
 	delbridge $BR_NAME
 	createbridge
 	# start dnsmasq
+	echo "> starting dnsmasq ..."
 	service dnsmasq start
 	# start hostapd
+	echo "> starting hostapd ..."
 	service hostapd start
 	# add wlan interface to bridge
+	echo "> setting iptables forward ..."
 	WLAN_IF=`getwlanif`
 	if [ -n "$WLAN_IF" ]; then
 		brctl addif $BR_NAME $WLAN_IF
@@ -245,30 +246,36 @@ routerstart() {
 	setnatforward
 
 	# ss
-	`startss`
-	`setssmode $ss_mode`
+	echo "> starting shadowsocks ..."
+	startss
+	setssmode $ss_mode
 
-	echo "OK"
+	echo "> OK"
 
 	# show status
 	routerstatus
 }
 
 routerstop() {
-	echo -n "> stopping ... "
+	echo "> stopping ..."
 	# stop ss
+	echo "> stopping shadowsocks ..."
 	stopss
 	setssmode none
 	# stop nat forward
+	echo "> stopping iptables forward ..."
 	clearnatforward
 	# delete bridge
+	echo "> deleting bridge ..."
 	delbridge $BR_NAME
 	# stop dnsmasq
+	echo "> stopping dnsmasq ..."
 	stopservice dnsmasq
 	# stop hostapd
+	echo "> stopping hostapd ..."
 	stopservice hostapd
 
-	echo "OK"
+	echo "> OK"
 }
 
 routerstatus() {
@@ -293,9 +300,9 @@ routerstatus() {
 dnsmasqcmd() {
 	case $1 in
 	restart|reload)
-	echo -n "> Reloading dnsmasq... "
+	echo "> Reloading dnsmasq ..."
 	`service dnsmasq restart`
-	echo "OK"
+	echo "> OK"
 	;;
 	*)
 	echo ""
@@ -309,32 +316,31 @@ dnsmasqcmd() {
 sscmd() {
 	case $1 in
 	start)
-	echo -n "> starting shadowsocks ... "
+	echo "> starting shadowsocks ..."
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
-		echo "Abort"
 		echo "> ss-redir is already running at pid: $SS_PID"
 	else
 		startss
-		echo "OK"
+		echo "> OK"
 		setssmode $ss_mode
 	fi
 	;;
 	stop)
-	echo -n "> stopping shadowsocks ... "
+	echo "> stopping shadowsocks ..."
 	stopss
-	echo "OK"
+	echo "> OK"
 	setssmode none
 	;;
 	restart)
-	echo -n "> restarting shadowsocks ... "
+	echo "> restarting shadowsocks ..."
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
 		kill $SS_PID
 		sleep 2
 	fi
 	startss
-	echo "OK"
+	echo "> OK"
 	setssmode $ss_mode
 	;;
 	status)
