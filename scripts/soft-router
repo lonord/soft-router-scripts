@@ -168,7 +168,7 @@ setssmode() {
 		iptables -t nat -A OUTPUT -j $ss_rule_name
 	fi
 	# if there is no set in ipset, create it
-	if [ -n "`ipset list $SS_IPSET_NAME | grep "does not exist"`" ]; then
+	if [ ! -n "`ipset list | grep $SS_IPSET_NAME`" ]; then
 		ipset create $SS_IPSET_NAME hash:ip
 	fi
 	
@@ -337,7 +337,6 @@ sscmd() {
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
 		kill $SS_PID
-		sleep 2
 	fi
 	startss
 	echo "> OK"
@@ -421,7 +420,6 @@ routerstatus
 
 restart|reload)
 routerstop
-sleep 3
 routerstart
 ;;
 
