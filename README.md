@@ -56,5 +56,6 @@ soft-router ss stop			# stop shadowsocks
 soft-router ss restart		# restart shadowsocks
 soft-router ss status		# show shadowsocks status
 soft-router ss global		# switch shadowsocks to global mode
-soft-router ss auto			# switch shadowsocks to auto mode (using gfwlist)
+soft-router ss auto		# switch shadowsocks to auto mode (using gfwlist)
+soft-router ss up		# update gfwlist
 ```

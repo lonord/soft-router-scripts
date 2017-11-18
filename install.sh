@@ -17,8 +17,10 @@ cp soft-router gfwlist2dnsmasq.sh wpa_supplicant_pid.sh $OUT_DIR
 echo "OK"
 
 echo -n "> Create configure file ... "
-mkdir ~/.soft-router
-cp default.soft-router.conf ~/.soft-router/soft-router.conf
+if [ ! -f "~/.soft-router/soft-router.conf" ]; then
+	mkdir ~/.soft-router
+	cp default.soft-router.conf ~/.soft-router/soft-router.conf
+fi
 echo "OK"
 
 echo "> Install completed."

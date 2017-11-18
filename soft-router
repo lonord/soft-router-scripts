@@ -11,11 +11,42 @@ SS_LOCAL_PORT="1080"
 SS_ENCRYPT_METHOD="aes-256-cfb"
 # ipset 
 SS_IPSET_NAME="gfwlist"
+# dnsmasq configure file directory
+DNSMASQ_CONF_DIR="/etc/dnsmasq.d"
 
 source ~/.soft-router/soft-router.conf
 
+# session store file
+SESSION_FILE="~/.soft-router/session.dat"
+
 # ss mode
-ss_mode="auto"
+ss_mode=`readsession ss_rule`
+if [ -z "$ss_mode" ]; then
+	ss_mode="auto"
+fi
+
+readsession() {
+	if [ -f $SESSION_FILE -a -n "$1=" ]; then
+		echo cat $SESSION_FILE | grep "$1"= | cut -f 2 -d =
+	fi
+}
+
+savesession() {
+	if [ -f $SESSION_FILE -a -n "$1=" -a -n "$2" ]; then
+		if [ -n "`cat $SESSION_FILE | grep $1=`" ]; then
+			sed '/$1=/'d $SESSION_FILE
+		fi
+		echo "$1=$2" >> $SESSION_FILE
+	fi
+}
+
+deletesession() {
+	if [ -f $SESSION_FILE -a -n "$1=" ]; then
+		if [ -n "`cat $SESSION_FILE | grep $1=`" ]; then
+			sed '/$1=/'d $SESSION_FILE
+		fi
+	fi
+}
 
 check() {
 	echo -n "> Checking $1 ... "
@@ -86,10 +117,17 @@ createbridge() {
 }
 
 setnatforward() {
-	iptables -t nat -A POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE
+	rule="POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE"
+	iptables -t nat -A $rule
+	`savesession nat_rule $rule`
 }
 
 clearnatforward() {
+	rule=`readsession nat_rule`
+	if [ -n "$rule" ]; then
+		iptables -t nat -D $rule
+		`deletesession nat_rule`
+	fi
 	iptables -t nat -D POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE
 }
 
@@ -148,8 +186,6 @@ resetsschain() {
 
 setssmode() {
 	# set ss mode: none|auto|global
-	echo "> shadowsocks mode: $1"
-
 	ss_rule_name="SS"
 	# if there is no SS chain, create it
 	if [ -z "`iptables -t nat -L | grep $ss_rule_name`" ]; then
@@ -165,14 +201,19 @@ setssmode() {
 	case $1 in
 	none)
 	resetsschain $ss_rule_name
+	`savesession ss_rule $ss_rule_name`
 	;;
 	auto)
 	resetsschain $ss_rule_name
 	iptables -t nat -A $ss_rule_name -p tcp -m set --match-set $SS_IPSET_NAME dst -j REDIRECT --to-port $SS_LOCAL_PORT
+	`savesession ss_rule $ss_rule_name`
+	echo "> shadowsocks mode: $1"
 	;;
 	global)
 	resetsschain $ss_rule_name
 	iptables -t nat -A $ss_rule_name -p tcp -j REDIRECT --to-port $SS_LOCAL_PORT
+	`savesession ss_rule $ss_rule_name`
+	echo "> shadowsocks mode: $1"
 	;;
 	*)
 	echo "> WARNING: unrecognized shadowsocks mode: $1"
@@ -202,12 +243,12 @@ routerstart() {
 		exit 0
 	fi
 
-	echo -n "> starting... "
+	echo -n "> starting ... "
 
 	# stop exist process
 	stopservice dnsmasq
 	stopservice hostapd
-	stopservice ss-redir
+	stopss
 	# stop wpasupplicant which is using wlan interface
 	stopwpasupplicant
 
@@ -238,8 +279,20 @@ routerstart() {
 }
 
 routerstop() {
-	#
-	echo "stop"
+	echo -n "> stopping ... "
+	# stop ss
+	stopss
+	setssmode none
+	# stop nat forward
+	clearnatforward
+	# delete bridge
+	delbridge $BR_NAME
+	# stop dnsmasq
+	stopservice dnsmasq
+	# stop hostapd
+	stopservice hostapd
+
+	echo "OK"
 }
 
 routerstatus() {
@@ -257,6 +310,7 @@ routerstatus() {
 	fi
 	if [ -n "$SS_PID" ]; then
 		echo "> ss-redir is running at pid: $SS_PID"
+		echo "> shadowsocks mode: $ss_mode"
 	fi
 }
 
@@ -277,8 +331,66 @@ dnsmasqcmd() {
 }
 
 sscmd() {
-	#
-	echo "sscmd"
+	case $1 in
+	start)
+	echo -n "> starting shadowsocks ... "
+	SS_PID=`pidof ss-redir`
+	if [ -n "$SS_PID" ]; then
+		echo "Abort"
+		echo "> ss-redir is already running at pid: $SS_PID"
+	else
+		startss
+		echo "OK"
+		setssmode $ss_mode
+	fi
+	;;
+	stop)
+	echo -n "> stopping shadowsocks ... "
+	stopss
+	echo "OK"
+	setssmode none
+	;;
+	restart)
+	echo -n "> restarting shadowsocks ... "
+	SS_PID=`pidof ss-redir`
+	if [ -n "$SS_PID" ]; then
+		kill $SS_PID
+		sleep 2
+	fi
+	startss
+	echo "OK"
+	setssmode $ss_mode
+	;;
+	status)
+	SS_PID=`pidof ss-redir`
+	if [ -n "$SS_PID" ]; then
+		echo "> ss-redir is running at pid: $SS_PID"
+		echo "> shadowsocks mode: $ss_mode"
+	fi
+	;;
+	global)
+	setssmode global
+	;;
+	auto)
+	setssmode auto
+	;;
+	up)
+	./gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR
+	dnsmasqcmd reload
+	;;
+	*)
+	echo ""
+	echo "Usage: soft-router ss <action>"
+	echo "       soft-router ss start		start shadowsocks"
+	echo "       soft-router ss stop		stop shadowsocks"
+	echo "       soft-router ss restart		restart shadowsocks"
+	echo "       soft-router ss status		show shadowsocks status"
+	echo "       soft-router ss global		switch shadowsocks to global mode"
+	echo "       soft-router ss auto		switch shadowsocks to auto mode (using gfwlist)"
+	echo "       soft-router ss up			update gfwlist"
+	echo ""
+	;;
+	esac
 }
 
 case $1 in
