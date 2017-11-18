@@ -1,0 +1,325 @@
+#!/bin/bash
+
+# interface connected to internet
+OUTER_IF="eth0"
+# bridge name
+BR_NAME="br-lan"
+# address of bridge
+BR_ADDR="192.168.8.1"
+# shadowsocks configure
+SS_LOCAL_PORT="1080"
+SS_ENCRYPT_METHOD="aes-256-cfb"
+# ipset 
+SS_IPSET_NAME="gfwlist"
+
+source ~/.soft-router/soft-router.conf
+
+# ss mode
+ss_mode="auto"
+
+check() {
+	echo -n "> Checking $1 ... "
+	if [ -n "`which $1`" ]; then
+		echo "OK"
+	else
+		echo "Not found"
+		exit 1
+	fi
+}
+
+subargs() {
+	idx=$1
+	let "idx+=1"
+	echo $@ | cut -f "$idx"- -d " "
+}
+
+getwlanif() {
+	# find hostapd.conf
+	HOSTAPD_CONF=`cat /etc/init.d/hostapd | grep DAEMON_CONF= | cut -f2 -d =`
+	if [ -f "$HOSTAPD_CONF" ]; then
+		# find wlan interface name
+		echo `cat $HOSTAPD_CONF | grep interface= | cut -f2 -d =`
+	fi
+}
+
+stopwpasupplicant() {
+	# find wlan interface name
+	WLAN_IF=`getwlanif`
+	if [ -n "$WLAN_IF" ]; then
+		# find pid of wpa_supplicant of this interface
+		WPA_PID=`./wpa_supplicant_pid.sh $WLAN_IF`
+		if [ -n "$WPA_PID" ]; then
+			# kill wpa_supplicant
+			kill $WPA_PID
+		fi
+	fi
+}
+
+stopservice() {
+	# stop service using 'service xxx stop' first
+	`service $1 stop`
+	PID=`pidof $1`
+	# check status again
+	if [ -n "$PID" ]; then
+		kill $PID
+	fi
+}
+
+delbridge() {
+	`ifconfig $1 down`
+	`brctl delbr $1`
+}
+
+createbridge() {
+	brctl addbr $BR_NAME
+	ifconfig $BR_NAME $BR_ADDR netmask 255.255.255.0 up
+	if [ -n "$LAN" ]; then
+		OLD_IFS="$IFS"
+		IFS=" "
+		arr=($LAN)
+		IFS="$OLD_IFS"
+		for s in ${arr[@]}
+		do
+			brctl addif $BR_NAME $s
+		done
+	fi
+}
+
+setnatforward() {
+	iptables -t nat -A POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE
+}
+
+clearnatforward() {
+	iptables -t nat -D POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE
+}
+
+startss() {
+	if [ -z "$SS_HOST" ]; then
+		echo "> WARNING: SS_HOST is required"
+	fi
+	if [ -z "$SS_PORT" ]; then
+		echo "> WARNING: SS_PORT is required"
+	fi
+	if [ -z "$SS_LOCAL_PORT" ]; then
+		echo "> WARNING: SS_LOCAL_PORT is required"
+	fi
+	if [ -z "$SS_SECRET" ]; then
+		echo "> WARNING: SS_SECRET is required"
+	fi
+	if [ -z "$SS_ENCRYPT_METHOD" ]; then
+		echo "> WARNING: SS_ENCRYPT_METHOD is required"
+	fi
+	`nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
+	echo "> shadowsocks started"
+}
+
+stopss() {
+	SS_PID=`pidof ss-redir`
+	if [ -n "$SS_PID" ]; then
+		kill $SS_PID
+		echo "> shadowsocks stopped"
+	fi
+}
+
+resetsschain() {
+	iptables -t nat -F $1
+	iptables -t nat -A $1 -d $SS_HOST -j RETURN
+	iptables -t nat -A $1 -d 0.0.0.0/8 -j RETURN
+	iptables -t nat -A $1 -d 10.0.0.0/8 -j RETURN
+	iptables -t nat -A $1 -d 127.0.0.0/8 -j RETURN
+	iptables -t nat -A $1 -d 169.254.0.0/16 -j RETURN
+	iptables -t nat -A $1 -d 172.16.0.0/12 -j RETURN
+	iptables -t nat -A $1 -d 192.168.0.0/16 -j RETURN
+	iptables -t nat -A $1 -d 224.0.0.0/4 -j RETURN
+	iptables -t nat -A $1 -d 240.0.0.0/4 -j RETURN
+
+	# no redir list
+	if [ -n "$SS_NO_REDIR_LIST" ]; then
+		OLD_IFS="$IFS"
+		IFS=" "
+		arr=($SS_NO_REDIR_LIST)
+		IFS="$OLD_IFS"
+		for s in ${arr[@]}
+		do
+			iptables -t nat -A $1 -d $s -j RETURN
+		done
+	fi
+}
+
+setssmode() {
+	# set ss mode: none|auto|global
+	echo "> shadowsocks mode: $1"
+
+	ss_rule_name="SS"
+	# if there is no SS chain, create it
+	if [ -z "`iptables -t nat -L | grep $ss_rule_name`" ]; then
+		iptables -t nat -N SS
+		iptables -t nat -A PREROUTING -j $ss_rule_name
+		iptables -t nat -A OUTPUT -j $ss_rule_name
+	fi
+	# if there is no set in ipset, create it
+	if [ -n "`ipset list $SS_IPSET_NAME | grep "does not exist"`" ]; then
+		ipset create $SS_IPSET_NAME hash:ip
+	fi
+	
+	case $1 in
+	none)
+	resetsschain $ss_rule_name
+	;;
+	auto)
+	resetsschain $ss_rule_name
+	iptables -t nat -A $ss_rule_name -p tcp -m set --match-set $SS_IPSET_NAME dst -j REDIRECT --to-port $SS_LOCAL_PORT
+	;;
+	global)
+	resetsschain $ss_rule_name
+	iptables -t nat -A $ss_rule_name -p tcp -j REDIRECT --to-port $SS_LOCAL_PORT
+	;;
+	*)
+	echo "> WARNING: unrecognized shadowsocks mode: $1"
+	;;
+	esac
+}
+
+
+checkdepedence() {
+	check brctl
+	check dnsmasq
+	check hostapd
+	check ss-redir
+	check ipset
+	check iptables
+}
+
+routerstart() {
+	DNSMASQ_PID=`pidof dnsmasq`
+	HOSTAPD_PID=`pidof hostapd`
+	SS_PID=`pidof ss-redir`
+	if [ -n "$DNSMASQ_PID" -a -n "$HOSTAPD_PID" -a -n "$SS_PID" ]; then
+		echo "> soft-router is running..."
+		echo "> dnsmasq is running at pid: $DNSMASQ_PID"
+		echo "> hostapd is running at pid: $HOSTAPD_PID"
+		echo "> ss-redir is running at pid: $SS_PID"
+		exit 0
+	fi
+
+	echo -n "> starting... "
+
+	# stop exist process
+	stopservice dnsmasq
+	stopservice hostapd
+	stopservice ss-redir
+	# stop wpasupplicant which is using wlan interface
+	stopwpasupplicant
+
+	# create bridge
+	delbridge $BR_NAME
+	createbridge
+	# start dnsmasq
+	service dnsmasq start
+	# start hostapd
+	service hostapd start
+	# add wlan interface to bridge
+	WLAN_IF=`getwlanif`
+	if [ -n "$WLAN_IF" ]; then
+		brctl addif $BR_NAME $WLAN_IF
+	fi
+	# configure nat forward
+	echo 1 > /proc/sys/net/ipv4/ip_forward
+	setnatforward
+
+	# ss
+	startss
+	setssmode $ss_mode
+
+	echo "OK"
+
+	# show status
+	routerstatus
+}
+
+routerstop() {
+	#
+	echo "stop"
+}
+
+routerstatus() {
+	DNSMASQ_PID=`pidof dnsmasq`
+	HOSTAPD_PID=`pidof hostapd`
+	SS_PID=`pidof ss-redir`
+	if [ -n "$DNSMASQ_PID" -a -n "$HOSTAPD_PID" -a -n "$SS_PID" ]; then
+		echo "> soft-router is running..."
+	fi
+	if [ -n "$DNSMASQ_PID" ]; then
+		echo "> dnsmasq is running at pid: $DNSMASQ_PID"
+	fi
+	if [ -n "$HOSTAPD_PID" ]; then
+		echo "> hostapd is running at pid: $HOSTAPD_PID"
+	fi
+	if [ -n "$SS_PID" ]; then
+		echo "> ss-redir is running at pid: $SS_PID"
+	fi
+}
+
+dnsmasqcmd() {
+	case $1 in
+	restart|reload)
+	echo -n "> Reloading dnsmasq... "
+	`service dnsmasq restart`
+	echo "OK"
+	;;
+	*)
+	echo ""
+	echo "Usage: soft-router dnsmasq <action>"
+	echo "       soft-router dnsmasq reload		reload dnsmasq"
+	echo ""
+	;;
+	esac
+}
+
+sscmd() {
+	#
+	echo "sscmd"
+}
+
+case $1 in
+
+check)
+checkdepedence
+;;
+
+start)
+routerstart
+;;
+
+status)
+routerstatus
+;;
+
+restart|reload)
+routerstop
+sleep 3
+routerstart
+;;
+
+dnsmasq)
+dnsmasqcmd `subargs 2 $@`
+;;
+
+ss)
+sscmd `subargs 2 $@`
+;;
+
+*)
+echo "Soft router script V1.0	@by Loy B. <lonord@qq.com> (github.com/lonord)"
+echo ""
+echo "Usage: soft-router <command> [action]"
+echo "       soft-router check	check depedences"
+echo "       soft-router start	start router"
+echo "       soft-router status	show router status"
+echo "       soft-router restart	restart router"
+echo "       soft-router dnsmasq	dnsmasq sub command"
+echo "       soft-router ss		shadowsocks sub command"
+echo ""
+;;
+
+esac
