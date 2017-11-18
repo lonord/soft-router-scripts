@@ -54,7 +54,7 @@ stopwpasupplicant() {
 	WLAN_IF=`getwlanif`
 	if [ -n "$WLAN_IF" ]; then
 		# find pid of wpa_supplicant of this interface
-		WPA_PID=`./wpa_supplicant_pid.sh $WLAN_IF`
+		WPA_PID=`wpa_supplicant_pid.sh $WLAN_IF`
 		if [ -n "$WPA_PID" ]; then
 			# kill wpa_supplicant
 			kill $WPA_PID
@@ -78,7 +78,7 @@ delbridge() {
 }
 
 createbridge() {
-	brctl addbr $BR_NAME
+	`brctl addbr $BR_NAME`
 	ifconfig $BR_NAME $BR_ADDR netmask 255.255.255.0 up
 	if [ -n "$LAN" ]; then
 		OLD_IFS="$IFS"
@@ -245,8 +245,8 @@ routerstart() {
 	setnatforward
 
 	# ss
-	startss
-	setssmode $ss_mode
+	`startss`
+	`setssmode $ss_mode`
 
 	echo "OK"
 
@@ -351,7 +351,7 @@ sscmd() {
 	setssmode auto
 	;;
 	up)
-	./gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR
+	gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR
 	dnsmasqcmd reload
 	;;
 	*)
@@ -405,6 +405,10 @@ start)
 routerstart
 ;;
 
+stop)
+routerstop
+;;
+
 status)
 routerstatus
 ;;
@@ -429,6 +433,7 @@ echo ""
 echo "Usage: soft-router <command> [action]"
 echo "       soft-router check	check depedences"
 echo "       soft-router start	start router"
+echo "       soft-router stop	stop router"
 echo "       soft-router status	show router status"
 echo "       soft-router restart	restart router"
 echo "       soft-router dnsmasq	dnsmasq sub command"

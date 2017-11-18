@@ -62,6 +62,12 @@ soft-router check
 soft-router start
 ```
 
+### 停止软路由脚本
+
+```bash
+soft-router stop
+```
+
 ### 重启软路由脚本
 
 ```bash
