@@ -18,7 +18,9 @@ echo "OK"
 
 echo -n "> Create configure file ... "
 if [ ! -f "~/.soft-router/soft-router.conf" ]; then
-	mkdir ~/.soft-router
+	if [ ! -e "~/.soft-router" ]; then
+		mkdir ~/.soft-router
+	fi
 	cp default.soft-router.conf ~/.soft-router/soft-router.conf
 fi
 echo "OK"
