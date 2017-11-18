@@ -22,7 +22,10 @@ if [ ! -e ~/.soft-router/soft-router.conf ]; then
 		mkdir ~/.soft-router
 	fi
 	cp config/default.soft-router.conf ~/.soft-router/soft-router.conf
+	echo "OK"
+else
+	echo "Abort"
+	echo "> A config file is already exist"
 fi
-echo "OK"
 
 echo "> Install completed."
