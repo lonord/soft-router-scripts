@@ -322,15 +322,15 @@ sscmd() {
 		echo "> ss-redir is already running at pid: $SS_PID"
 	else
 		startss
-		echo "> OK"
 		setssmode $ss_mode
+		echo "> OK"
 	fi
 	;;
 	stop)
 	echo "> stopping shadowsocks ..."
 	stopss
-	echo "> OK"
 	setssmode none
+	echo "> OK"
 	;;
 	restart)
 	echo "> restarting shadowsocks ..."
@@ -339,8 +339,8 @@ sscmd() {
 		kill $SS_PID
 	fi
 	startss
-	echo "> OK"
 	setssmode $ss_mode
+	echo "> OK"
 	;;
 	status)
 	SS_PID=`pidof ss-redir`
