@@ -335,6 +335,9 @@ sscmd() {
 		echo "> ss-redir is already running at pid: $SS_PID"
 	else
 		startss
+		if [ "$ss_mode" = "none" ]; then
+			ss_mode="auto"
+		fi
 		setssmode $ss_mode
 		echo "> OK"
 		ssstatus
