@@ -177,7 +177,7 @@ setssmode() {
 	
 	case $1 in
 	none)
-	resetsschain $ss_rule_name
+	iptables -t nat -F $ss_rule_name
 	savesession ss_rule none
 	;;
 	auto)
