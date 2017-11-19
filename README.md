@@ -15,20 +15,23 @@
 ### 配置dnsmasq
 
 ```bash
+# 编辑 /etc/dnsmasq.conf
 vim /etc/dnsmasq.conf
-
 # 设置以下项
-strict-order
 dhcp-range=192.168.8.100,192.168.8.250,48h
-listen-address=192.168.8.1
 conf-dir=/etc/dnsmasq.d
+
+# 编辑 /etc/resolvconf.conf
+vim /etc/resolvconf.conf
+# 设置以下项
+name_servers=127.0.0.1
 ```
 
 ### 配置hostapd
 
 ```bash
+# 编辑 /etc/hostapd/hostapd.conf
 vim /etc/hostapd/hostapd.conf
-
 # 设置以下项
 interface=wlan0
 driver=nl80211
@@ -46,6 +49,11 @@ wpa_passphrase=12345678
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP
+
+# 编辑 /etc/init.d/hostapd
+vim /etc/init.d/hostapd
+# 修改以下项
+DAEMON_CONF=/etc/hostapd/hostapd.conf
 ```
 
 ## 脚本
