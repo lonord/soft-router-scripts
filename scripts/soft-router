@@ -316,6 +316,16 @@ dnsmasqcmd() {
 	esac
 }
 
+ssstatus() {
+	SS_PID=`pidof ss-redir`
+	if [ -n "$SS_PID" ]; then
+		echo "> ss-redir is running at pid: $SS_PID"
+		echo "> shadowsocks mode: $ss_mode"
+	else
+		echo "> shadowsocks is not running"
+	fi
+}
+
 sscmd() {
 	case $1 in
 	start)
@@ -346,17 +356,19 @@ sscmd() {
 	echo "> OK"
 	;;
 	status)
-	SS_PID=`pidof ss-redir`
-	if [ -n "$SS_PID" ]; then
-		echo "> ss-redir is running at pid: $SS_PID"
-		echo "> shadowsocks mode: $ss_mode"
-	fi
+	ssstatus
 	;;
 	global)
-	setssmode global
+	ss_mode="global"
+	echo "> setting shadowsocks mode to $ss_mode ..."
+	setssmode $ss_mode
+	ssstatus
 	;;
 	auto)
-	setssmode auto
+	ss_mode="auto"
+	echo "> setting shadowsocks mode to $ss_mode ..."
+	setssmode $ss_mode
+	ssstatus
 	;;
 	up)
 	gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR
