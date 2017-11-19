@@ -365,12 +365,24 @@ sscmd() {
 	ssstatus
 	;;
 	global)
+	SS_PID=`pidof ss-redir`
+	if [ ! -n "$SS_PID" ]; then
+		echo "> starting shadowsocks ..."
+		startss
+		echo "> OK"
+	fi
 	ss_mode="global"
 	echo "> setting shadowsocks mode to $ss_mode ..."
 	setssmode $ss_mode
 	ssstatus
 	;;
 	auto)
+	SS_PID=`pidof ss-redir`
+	if [ ! -n "$SS_PID" ]; then
+		echo "> starting shadowsocks ..."
+		startss
+		echo "> OK"
+	fi
 	ss_mode="auto"
 	echo "> setting shadowsocks mode to $ss_mode ..."
 	setssmode $ss_mode
