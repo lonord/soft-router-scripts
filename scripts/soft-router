@@ -249,11 +249,12 @@ routerstart() {
 	setnatforward
 
 	# ss
-	echo "> starting shadowsocks ..."
-	startss
-	setssmode $ss_mode
-
-	echo "> OK"
+	if [ "$ss_mode" != "none" ]; then
+		echo "> starting shadowsocks ..."
+		startss
+		setssmode $ss_mode
+		echo "> OK"
+	fi
 
 	# show status
 	routerstatus
