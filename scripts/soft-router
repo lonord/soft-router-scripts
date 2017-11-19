@@ -1,27 +1,28 @@
 #!/bin/bash
 
 # session store file
-SESSION_FILE="~/.soft-router/session.dat"
+SESSION_FILE=~/.soft-router/session.dat
+touch $SESSION_FILE
 
 readsession() {
-	if [ -f $SESSION_FILE -a -n "$1=" ]; then
-		echo cat $SESSION_FILE | grep "$1"= | cut -f 2 -d =
+	if [ -f $SESSION_FILE -a -n "$1" ]; then
+		cat $SESSION_FILE | grep ^$1= | cut -f 2 -d =
 	fi
 }
 
 savesession() {
-	if [ -f $SESSION_FILE -a -n "$1=" -a -n "$2" ]; then
-		if [ -n "`cat $SESSION_FILE | grep $1=`" ]; then
-			sed '/$1=/'d $SESSION_FILE
+	if [ -f $SESSION_FILE -a -n "$1" -a -n "$2" ]; then
+		if [ -n "`cat $SESSION_FILE | grep ^$1=`" ]; then
+			sed -i '/^'$1'=/d' $SESSION_FILE
 		fi
-		echo "$1=$2" >> $SESSION_FILE
+	echo "$1=$2" >> $SESSION_FILE
 	fi
 }
 
 deletesession() {
-	if [ -f $SESSION_FILE -a -n "$1=" ]; then
-		if [ -n "`cat $SESSION_FILE | grep $1=`" ]; then
-			sed '/$1=/'d $SESSION_FILE
+	if [ -f $SESSION_FILE -a -n "$1" ]; then
+		if [ -n "`cat $SESSION_FILE | grep ^$1=`" ]; then
+			sed -i '/^'$1'=/d' $SESSION_FILE
 		fi
 	fi
 }
@@ -389,7 +390,7 @@ SS_ENCRYPT_METHOD="aes-256-cfb"
 # ipset 
 SS_IPSET_NAME="gfwlist"
 # dnsmasq configure file directory
-DNSMASQ_CONF_DIR="/etc/dnsmasq.d"
+DNSMASQ_CONF_DIR=/etc/dnsmasq.d
 
 source ~/.soft-router/soft-router.conf
 
