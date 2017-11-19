@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# session store file
+SESSION_FILE="~/.soft-router/session.dat"
 
 readsession() {
 	if [ -f $SESSION_FILE -a -n "$1=" ]; then
@@ -391,8 +393,6 @@ DNSMASQ_CONF_DIR="/etc/dnsmasq.d"
 
 source ~/.soft-router/soft-router.conf
 
-# session store file
-SESSION_FILE="~/.soft-router/session.dat"
 
 # ss mode
 ss_mode=`readsession ss_rule`
