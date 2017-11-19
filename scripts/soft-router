@@ -178,17 +178,17 @@ setssmode() {
 	case $1 in
 	none)
 	resetsschain $ss_rule_name
-	`savesession ss_rule $ss_rule_name`
+	savesession ss_rule none
 	;;
 	auto)
 	resetsschain $ss_rule_name
 	iptables -t nat -A $ss_rule_name -p tcp -m set --match-set $SS_IPSET_NAME dst -j REDIRECT --to-port $SS_LOCAL_PORT
-	`savesession ss_rule $ss_rule_name`
+	savesession ss_rule auto
 	;;
 	global)
 	resetsschain $ss_rule_name
 	iptables -t nat -A $ss_rule_name -p tcp -j REDIRECT --to-port $SS_LOCAL_PORT
-	`savesession ss_rule $ss_rule_name`
+	savesession ss_rule global
 	;;
 	*)
 	echo "> WARNING: unrecognized shadowsocks mode: $1"
@@ -397,7 +397,7 @@ source ~/.soft-router/soft-router.conf
 
 # ss mode
 ss_mode=`readsession ss_rule`
-if [ -z "$ss_mode" ]; then
+if [ ! -n "$ss_mode" ]; then
 	ss_mode="auto"
 fi
 
