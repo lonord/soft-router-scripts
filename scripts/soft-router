@@ -389,7 +389,7 @@ sscmd() {
 	ssstatus
 	;;
 	up)
-	gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR
+	gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR/gfwlist.conf
 	dnsmasqcmd reload
 	;;
 	*)
