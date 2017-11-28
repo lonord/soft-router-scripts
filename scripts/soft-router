@@ -166,7 +166,7 @@ setssmode() {
 	ss_rule_name="SS"
 	# if there is no SS chain, create it
 	if [ -z "`iptables -t nat -L -n | grep $ss_rule_name`" ]; then
-		iptables -t nat -N SS
+		iptables -t nat -N $ss_rule_name
 		iptables -t nat -A PREROUTING -j $ss_rule_name
 		iptables -t nat -A OUTPUT -j $ss_rule_name
 	fi
