@@ -7,6 +7,31 @@ touch $SESSION_FILE
 KCP_CLIENT_PID_FILE=/var/run/kcp-client-ss.pid
 touch $KCP_CLIENT_PID_FILE
 
+USER_GFWLIST=~/.soft-router/user-gfwlist.dat
+touch $USER_GFWLIST
+
+read_user_gfwlist() {
+	cat $USER_GFWLIST
+}
+
+add_user_gfwlist() {
+	sed -i '/^'$1'$/d' $USER_GFWLIST
+	echo "$1" >> $USER_GFWLIST
+}
+
+remove_user_gfwlist() {
+	sed -i '/^'$1'$/d' $USER_GFWLIST
+}
+
+generate_user_gfwlist() {
+	echo "" > $DNSMASQ_CONF_DIR/user.conf
+	for t in $(read_user_gfwlist)
+	do
+		echo "server=/$t/127.0.0.1#$SS_DNS_TUN_PORT" >> $DNSMASQ_CONF_DIR/user.conf
+		echo "ipset=/$t/$SS_IPSET_NAME" >> $DNSMASQ_CONF_DIR/user.conf
+	done
+}
+
 readsession() {
 	if [ -f $SESSION_FILE -a -n "$1" ]; then
 		cat $SESSION_FILE | grep ^$1= | cut -f 2 -d =
@@ -349,13 +374,37 @@ dnsmasqcmd() {
 	case $1 in
 	restart|reload)
 	echo "> Reloading dnsmasq ..."
+	generate_user_gfwlist
 	`service dnsmasq restart`
 	echo "> OK"
+	;;
+	list)
+	echo "> User defined site list:"
+	echo ""
+	read_user_gfwlist
+	echo ""
+	;;
+	add)
+	if [ -z "$2" ]; then
+		echo "> Invalid arg: site name is required"
+		exit 1
+	fi
+	add_user_gfwlist $2
+	;;
+	remove|delete)
+	if [ -z "$2" ]; then
+		echo "> Invalid arg: site name is required"
+		exit 1
+	fi
+	remove_user_gfwlist $2
 	;;
 	*)
 	echo ""
 	echo "Usage: soft-router dnsmasq <action>"
-	echo "       soft-router dnsmasq reload		reload dnsmasq"
+	echo "       soft-router dnsmasq reload      reload dnsmasq"
+	echo "       soft-router dnsmasq list        list user defined site list"
+	echo "       soft-router dnsmasq add         add a site"
+	echo "       soft-router dnsmasq remove      remove a site"
 	echo ""
 	;;
 	esac
