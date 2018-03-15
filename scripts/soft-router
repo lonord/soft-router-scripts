@@ -63,7 +63,7 @@ stopwpasupplicant() {
 		WPA_PID=`wpa_supplicant_pid.sh $WLAN_IF`
 		if [ -n "$WPA_PID" ]; then
 			# kill wpa_supplicant
-			kill $WPA_PID
+			kill $WPA_PID > /dev/null 2>&1
 		fi
 	fi
 }
@@ -74,7 +74,7 @@ stopservice() {
 	PID=`pidof $1`
 	# check status again
 	if [ -n "$PID" ]; then
-		kill $PID
+		kill $PID > /dev/null 2>&1
 	fi
 }
 
@@ -167,15 +167,15 @@ startsst() {
 stopss() {
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
-		kill $SS_PID
+		kill $SS_PID > /dev/null 2>&1
 	fi
-	kill $(cat $KCP_CLIENT_PID_FILE)
+	kill $(cat $KCP_CLIENT_PID_FILE) > /dev/null 2>&1
 }
 
 stopsst() {
 	SST_PID=`pidof ss-tunnel`
 	if [ -n "$SST_PID" ]; then
-		kill $SST_PID
+		kill $SST_PID > /dev/null 2>&1
 	fi
 }
 
@@ -399,7 +399,6 @@ sscmd() {
 		fi
 		setssmode $ss_mode
 		echo "> ss-redir start OK"
-		ssstatus
 	fi
 	SST_PID=$(pidof ss-tunnel)
 	if [ -n "$SST_PID" ]; then
@@ -407,8 +406,8 @@ sscmd() {
 	else
 		startsst
 		echo "> ss-tunnel start OK"
-		ssstatus
 	fi
+	ssstatus
 	;;
 	stop)
 	echo "> stopping shadowsocks ..."
@@ -421,11 +420,11 @@ sscmd() {
 	echo "> restarting shadowsocks ..."
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
-		kill $SS_PID
+		kill $SS_PID > /dev/null 2>&1
 	fi
 	SST_PID=$(pidof ss-tunnel)
 	if [ -n "$SST_PID" ]; then
-		kill $SST_PID
+		kill $SST_PID > /dev/null 2>&1
 	fi
 	startss
 	startsst
