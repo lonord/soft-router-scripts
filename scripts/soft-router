@@ -5,6 +5,7 @@ SESSION_FILE=~/.soft-router/session.dat
 touch $SESSION_FILE
 
 KCP_CLIENT_PID_FILE=/var/run/kcp-client-ss.pid
+touch $KCP_CLIENT_PID_FILE
 
 readsession() {
 	if [ -f $SESSION_FILE -a -n "$1" ]; then
@@ -136,11 +137,11 @@ startss() {
 			echo "> WARNING: KCPTUN_PORT is required"
 		fi
 		echo "> kcptun is on"
-		$(nohup kcp-client -r "$KCPTUN_REMOTE" -l ":$KCPTUN_PORT" $KCPTUN_PARAMS > /dev/null 2>&1 &)
+		nohup kcp-client -r "$KCPTUN_REMOTE" -l ":$KCPTUN_PORT" $KCPTUN_PARAMS > /dev/null 2>&1 &
 		echo $! > $KCP_CLIENT_PID_FILE
-		`nohup ss-redir -s 127.0.0.1 -p $KCPTUN_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
+		nohup ss-redir -s 127.0.0.1 -p $KCPTUN_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &
 	else
-		`nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
+		nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &
 	fi
 }
 
@@ -375,8 +376,8 @@ ssstatus() {
 		echo "> shadowsocks is not running"
 	fi
 	if [ "$KCPTUN" == "ON" ]; then
-		$KCPTUN_PID=$(cat $KCP_CLIENT_PID_FILE)
-		if [ -n "$KCPTUN_PID" -d "/proc/$KCPTUN_PID" ]; then
+		KCPTUN_PID=$(cat $KCP_CLIENT_PID_FILE)
+		if [ -n "$KCPTUN_PID" -a -d "/proc/$KCPTUN_PID" ]; then
 			echo "> kcptun is running ai pid: $KCPTUN_PID"
 		else
 			echo "> kcptun is not running"
