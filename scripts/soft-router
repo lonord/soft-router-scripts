@@ -4,6 +4,8 @@
 SESSION_FILE=~/.soft-router/session.dat
 touch $SESSION_FILE
 
+KCP_CLIENT_PID_FILE=/var/run/kcp-client-ss.pid
+
 readsession() {
 	if [ -f $SESSION_FILE -a -n "$1" ]; then
 		cat $SESSION_FILE | grep ^$1= | cut -f 2 -d =
@@ -126,13 +128,53 @@ startss() {
 	if [ -z "$SS_ENCRYPT_METHOD" ]; then
 		echo "> WARNING: SS_ENCRYPT_METHOD is required"
 	fi
-	`nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
+	if [ "$KCPTUN" == "ON" ]; then
+		if [ -z "$KCPTUN_REMOTE" ]; then
+			echo "> WARNING: KCPTUN_REMOTE is required"
+		fi
+		if [ -z "$KCPTUN_PORT" ]; then
+			echo "> WARNING: KCPTUN_PORT is required"
+		fi
+		echo "> kcptun is on"
+		$(nohup kcp-client -r "$KCPTUN_REMOTE" -l ":$KCPTUN_PORT" $KCPTUN_PARAMS > /dev/null 2>&1 &)
+		echo $! > $KCP_CLIENT_PID_FILE
+		`nohup ss-redir -s 127.0.0.1 -p $KCPTUN_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
+	else
+		`nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &`
+	fi
+}
+
+startsst() {
+	if [ -z "$SS_HOST" ]; then
+		echo "> WARNING: SS_HOST is required"
+	fi
+	if [ -z "$SS_PORT" ]; then
+		echo "> WARNING: SS_PORT is required"
+	fi
+	if [ -z "$SS_SECRET" ]; then
+		echo "> WARNING: SS_SECRET is required"
+	fi
+	if [ -z "$SS_ENCRYPT_METHOD" ]; then
+		echo "> WARNING: SS_ENCRYPT_METHOD is required"
+	fi
+	if [ -z "$SS_DNS_TUN_PORT" ]; then
+		echo "> WARNING: SS_DNS_TUN_PORT is required"
+	fi
+	`nohup ss-tunnel -s $SS_HOST -p $SS_PORT -l $SS_DNS_TUN_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 -L "8.8.8.8:53" -u > /dev/null 2>&1 &`
 }
 
 stopss() {
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
 		kill $SS_PID
+	fi
+	kill $(cat $KCP_CLIENT_PID_FILE)
+}
+
+stopsst() {
+	SST_PID=`pidof ss-tunnel`
+	if [ -n "$SST_PID" ]; then
+		kill $SST_PID
 	fi
 }
 
@@ -321,9 +363,23 @@ ssstatus() {
 	SS_PID=`pidof ss-redir`
 	if [ -n "$SS_PID" ]; then
 		echo "> ss-redir is running at pid: $SS_PID"
+	fi
+	SST_PID=`pidof ss-tunnel`
+	if [ -n "$SST_PID" ]; then
+		echo "> ss-tunnel is running at pid: $SST_PID"
+	fi
+	if [ -n "$SS_PID" -a -n "$SST_PID" ]; then
 		echo "> shadowsocks mode: $ss_mode"
 	else
 		echo "> shadowsocks is not running"
+	fi
+	if [ "$KCPTUN" == "ON" ]; then
+		$KCPTUN_PID=$(cat $KCP_CLIENT_PID_FILE)
+		if [ -n "$KCPTUN_PID" -d "/proc/$KCPTUN_PID" ]; then
+			echo "> kcptun is running ai pid: $KCPTUN_PID"
+		else
+			echo "> kcptun is not running"
+		fi
 	fi
 }
 
@@ -340,13 +396,22 @@ sscmd() {
 			ss_mode="auto"
 		fi
 		setssmode $ss_mode
-		echo "> OK"
+		echo "> ss-redir start OK"
+		ssstatus
+	fi
+	SST_PID=$(pidof ss-tunnel)
+	if [ -n "$SST_PID" ]; then
+		echo "> ss-tunnel is already running at pid: $SST_PID"
+	else
+		startsst
+		echo "> ss-tunnel start OK"
 		ssstatus
 	fi
 	;;
 	stop)
 	echo "> stopping shadowsocks ..."
 	stopss
+	stopsst
 	setssmode none
 	echo "> OK"
 	;;
@@ -356,7 +421,12 @@ sscmd() {
 	if [ -n "$SS_PID" ]; then
 		kill $SS_PID
 	fi
+	SST_PID=$(pidof ss-tunnel)
+	if [ -n "$SST_PID" ]; then
+		kill $SST_PID
+	fi
 	startss
+	startsst
 	setssmode $ss_mode
 	echo "> OK"
 	ssstatus
@@ -389,7 +459,7 @@ sscmd() {
 	ssstatus
 	;;
 	up)
-	gfwlist2dnsmasq.sh -d 8.8.8.8 -p 53 -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR/gfwlist.conf
+	gfwlist2dnsmasq.sh -d 127.0.0.1 -p $SS_DNS_TUN_PORT -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR/gfwlist.conf
 	dnsmasqcmd reload
 	;;
 	*)
@@ -419,6 +489,8 @@ SS_LOCAL_PORT="1080"
 SS_ENCRYPT_METHOD="aes-256-cfb"
 # ipset 
 SS_IPSET_NAME="gfwlist"
+# dns forward port
+SS_DNS_TUN_PORT="30053"
 # dnsmasq configure file directory
 DNSMASQ_CONF_DIR=/etc/dnsmasq.d
 
