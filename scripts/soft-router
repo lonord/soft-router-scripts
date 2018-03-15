@@ -244,6 +244,7 @@ checkdepedence() {
 	check dnsmasq
 	check hostapd
 	check ss-redir
+	check ss-tunnel
 	check ipset
 	check iptables
 }

@@ -10,6 +10,7 @@
 - `dnsmasq`
 - `hostapd`
 - `ss-redir`
+- `ss-tunnel`
 - `iptables`
 - `kcptun` [下载](https://github.com/xtaci/kcptun)后，将client_xxx_xxx文件名称改为kcp-client，并放到系统PATH下
 
