@@ -235,8 +235,8 @@ setssmode() {
 	# if there is no SS chain, create it
 	if [ -z "`iptables -t nat -L -n | grep $ss_rule_name`" ]; then
 		iptables -t nat -N $ss_rule_name
-		iptables -t nat -A PREROUTING -j $ss_rule_name
-		iptables -t nat -A OUTPUT -j $ss_rule_name
+		iptables -t nat -A PREROUTING -p tcp -s 192.168/16 -j $ss_rule_name
+		iptables -t nat -A OUTPUT -p tcp -j $ss_rule_name
 	fi
 	# if there is no set in ipset, create it
 	if [ ! -n "`ipset list | grep $SS_IPSET_NAME`" ]; then
@@ -427,7 +427,7 @@ ssstatus() {
 	if [ "$KCPTUN" == "ON" ]; then
 		KCPTUN_PID=$(cat $KCP_CLIENT_PID_FILE)
 		if [ -n "$KCPTUN_PID" -a -d "/proc/$KCPTUN_PID" ]; then
-			echo "> kcptun is running ai pid: $KCPTUN_PID"
+			echo "> kcptun is running at pid: $KCPTUN_PID"
 		else
 			echo "> kcptun is not running"
 		fi
