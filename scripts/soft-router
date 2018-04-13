@@ -118,13 +118,6 @@ checkdepedence() {
 }
 
 routerstart() {
-	HOSTAPD_PID=`pidof hostapd`
-	if [ -n "$HOSTAPD_PID" ]; then
-		echo "> soft-router is running..."
-		echo "> hostapd is running at pid: $HOSTAPD_PID"
-		exit 0
-	fi
-
 	echo "> starting ..."
 
 	# stop exist process
@@ -137,9 +130,11 @@ routerstart() {
 	echo "> creating bridge ..."
 	delbridge $BR_NAME
 	createbridge
-	# start hostapd
-	echo "> starting hostapd ..."
-	service hostapd start
+	if [ -n "$ENABLE_HOSTAPD" ]; then
+		# start hostapd
+		echo "> starting hostapd ..."
+		service hostapd start
+	fi
 	# add wlan interface to bridge
 	echo "> setting iptables forward ..."
 	WLAN_IF=`getwlanif`
