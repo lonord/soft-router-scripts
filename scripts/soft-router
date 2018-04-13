@@ -4,34 +4,6 @@
 SESSION_FILE=~/.soft-router/session.dat
 touch $SESSION_FILE
 
-KCP_CLIENT_PID_FILE=/var/run/kcp-client-ss.pid
-touch $KCP_CLIENT_PID_FILE
-
-USER_GFWLIST=~/.soft-router/user-gfwlist.dat
-touch $USER_GFWLIST
-
-read_user_gfwlist() {
-	cat $USER_GFWLIST
-}
-
-add_user_gfwlist() {
-	sed -i '/^'$1'$/d' $USER_GFWLIST
-	echo "$1" >> $USER_GFWLIST
-}
-
-remove_user_gfwlist() {
-	sed -i '/^'$1'$/d' $USER_GFWLIST
-}
-
-generate_user_gfwlist() {
-	echo "" > $DNSMASQ_CONF_DIR/user.conf
-	for t in $(read_user_gfwlist)
-	do
-		echo "server=/$t/127.0.0.1#$SS_DNS_TUN_PORT" >> $DNSMASQ_CONF_DIR/user.conf
-		echo "ipset=/$t/$SS_IPSET_NAME" >> $DNSMASQ_CONF_DIR/user.conf
-	done
-}
-
 readsession() {
 	if [ -f $SESSION_FILE -a -n "$1" ]; then
 		cat $SESSION_FILE | grep ^$1= | cut -f 2 -d =
@@ -138,152 +110,18 @@ clearnatforward() {
 	iptables -t nat -D POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE
 }
 
-startss() {
-	if [ -z "$SS_HOST" ]; then
-		echo "> WARNING: SS_HOST is required"
-	fi
-	if [ -z "$SS_PORT" ]; then
-		echo "> WARNING: SS_PORT is required"
-	fi
-	if [ -z "$SS_LOCAL_PORT" ]; then
-		echo "> WARNING: SS_LOCAL_PORT is required"
-	fi
-	if [ -z "$SS_SECRET" ]; then
-		echo "> WARNING: SS_SECRET is required"
-	fi
-	if [ -z "$SS_ENCRYPT_METHOD" ]; then
-		echo "> WARNING: SS_ENCRYPT_METHOD is required"
-	fi
-	if [ "$KCPTUN" == "ON" ]; then
-		if [ -z "$KCPTUN_REMOTE" ]; then
-			echo "> WARNING: KCPTUN_REMOTE is required"
-		fi
-		if [ -z "$KCPTUN_PORT" ]; then
-			echo "> WARNING: KCPTUN_PORT is required"
-		fi
-		echo "> kcptun is on"
-		nohup kcp-client -r "$KCPTUN_REMOTE" -l ":$KCPTUN_PORT" $KCPTUN_PARAMS > /dev/null 2>&1 &
-		echo $! > $KCP_CLIENT_PID_FILE
-		nohup ss-redir -s 127.0.0.1 -p $KCPTUN_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &
-	else
-		nohup ss-redir -s $SS_HOST -p $SS_PORT -l $SS_LOCAL_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 > /dev/null 2>&1 &
-	fi
-}
-
-startsst() {
-	if [ -z "$SS_HOST" ]; then
-		echo "> WARNING: SS_HOST is required"
-	fi
-	if [ -z "$SS_PORT" ]; then
-		echo "> WARNING: SS_PORT is required"
-	fi
-	if [ -z "$SS_SECRET" ]; then
-		echo "> WARNING: SS_SECRET is required"
-	fi
-	if [ -z "$SS_ENCRYPT_METHOD" ]; then
-		echo "> WARNING: SS_ENCRYPT_METHOD is required"
-	fi
-	if [ -z "$SS_DNS_TUN_PORT" ]; then
-		echo "> WARNING: SS_DNS_TUN_PORT is required"
-	fi
-	`nohup ss-tunnel -s $SS_HOST -p $SS_PORT -l $SS_DNS_TUN_PORT -k $SS_SECRET -m $SS_ENCRYPT_METHOD -t 60 -b 0.0.0.0 -L "8.8.8.8:53" -u > /dev/null 2>&1 &`
-}
-
-stopss() {
-	SS_PID=`pidof ss-redir`
-	if [ -n "$SS_PID" ]; then
-		kill $SS_PID > /dev/null 2>&1
-	fi
-	kill $(cat $KCP_CLIENT_PID_FILE) > /dev/null 2>&1
-}
-
-stopsst() {
-	SST_PID=`pidof ss-tunnel`
-	if [ -n "$SST_PID" ]; then
-		kill $SST_PID > /dev/null 2>&1
-	fi
-}
-
-resetsschain() {
-	iptables -t nat -F $1
-	iptables -t nat -A $1 -d $SS_HOST -j RETURN
-	iptables -t nat -A $1 -d 0.0.0.0/8 -j RETURN
-	iptables -t nat -A $1 -d 10.0.0.0/8 -j RETURN
-	iptables -t nat -A $1 -d 127.0.0.0/8 -j RETURN
-	iptables -t nat -A $1 -d 169.254.0.0/16 -j RETURN
-	iptables -t nat -A $1 -d 172.16.0.0/12 -j RETURN
-	iptables -t nat -A $1 -d 192.168.0.0/16 -j RETURN
-	iptables -t nat -A $1 -d 224.0.0.0/4 -j RETURN
-	iptables -t nat -A $1 -d 240.0.0.0/4 -j RETURN
-
-	# no redir list
-	if [ -n "$SS_NO_REDIR_LIST" ]; then
-		OLD_IFS="$IFS"
-		IFS=" "
-		arr=($SS_NO_REDIR_LIST)
-		IFS="$OLD_IFS"
-		for s in ${arr[@]}
-		do
-			iptables -t nat -A $1 -d $s -j RETURN
-		done
-	fi
-}
-
-setssmode() {
-	# set ss mode: none|auto|global
-	ss_rule_name="SS"
-	# if there is no SS chain, create it
-	if [ -z "`iptables -t nat -L -n | grep $ss_rule_name`" ]; then
-		iptables -t nat -N $ss_rule_name
-		iptables -t nat -A PREROUTING -p tcp -s 192.168/16 -j $ss_rule_name
-		iptables -t nat -A OUTPUT -p tcp -j $ss_rule_name
-	fi
-	# if there is no set in ipset, create it
-	if [ ! -n "`ipset list | grep $SS_IPSET_NAME`" ]; then
-		ipset create $SS_IPSET_NAME hash:ip
-	fi
-	
-	case $1 in
-	none)
-	iptables -t nat -F $ss_rule_name
-	savesession ss_rule none
-	;;
-	auto)
-	resetsschain $ss_rule_name
-	iptables -t nat -A $ss_rule_name -p tcp -m set --match-set $SS_IPSET_NAME dst -j REDIRECT --to-port $SS_LOCAL_PORT
-	savesession ss_rule auto
-	;;
-	global)
-	resetsschain $ss_rule_name
-	iptables -t nat -A $ss_rule_name -p tcp -j REDIRECT --to-port $SS_LOCAL_PORT
-	savesession ss_rule global
-	;;
-	*)
-	echo "> WARNING: unrecognized shadowsocks mode: $1"
-	;;
-	esac
-}
-
-
 checkdepedence() {
 	check brctl
 	check dnsmasq
 	check hostapd
-	check ss-redir
-	check ss-tunnel
-	check ipset
 	check iptables
 }
 
 routerstart() {
-	DNSMASQ_PID=`pidof dnsmasq`
 	HOSTAPD_PID=`pidof hostapd`
-	SS_PID=`pidof ss-redir`
-	if [ -n "$DNSMASQ_PID" -a -n "$HOSTAPD_PID" -a -n "$SS_PID" ]; then
+	if [ -n "$HOSTAPD_PID" ]; then
 		echo "> soft-router is running..."
-		echo "> dnsmasq is running at pid: $DNSMASQ_PID"
 		echo "> hostapd is running at pid: $HOSTAPD_PID"
-		echo "> ss-redir is running at pid: $SS_PID"
 		exit 0
 	fi
 
@@ -291,9 +129,7 @@ routerstart() {
 
 	# stop exist process
 	echo "> stopping old process ..."
-	stopservice dnsmasq
 	stopservice hostapd
-	stopss
 	# stop wpasupplicant which is using wlan interface
 	stopwpasupplicant
 
@@ -301,9 +137,6 @@ routerstart() {
 	echo "> creating bridge ..."
 	delbridge $BR_NAME
 	createbridge
-	# start dnsmasq
-	echo "> starting dnsmasq ..."
-	service dnsmasq start
 	# start hostapd
 	echo "> starting hostapd ..."
 	service hostapd start
@@ -317,33 +150,18 @@ routerstart() {
 	echo 1 > /proc/sys/net/ipv4/ip_forward
 	setnatforward
 
-	# ss
-	if [ "$ss_mode" != "none" ]; then
-		echo "> starting shadowsocks ..."
-		startss
-		setssmode $ss_mode
-		echo "> OK"
-	fi
-
 	# show status
 	routerstatus
 }
 
 routerstop() {
 	echo "> stopping ..."
-	# stop ss
-	echo "> stopping shadowsocks ..."
-	stopss
-	setssmode none
 	# stop nat forward
 	echo "> stopping iptables forward ..."
 	clearnatforward
 	# delete bridge
 	echo "> deleting bridge ..."
 	delbridge $BR_NAME
-	# stop dnsmasq
-	echo "> stopping dnsmasq ..."
-	stopservice dnsmasq
 	# stop hostapd
 	echo "> stopping hostapd ..."
 	stopservice hostapd
@@ -352,179 +170,10 @@ routerstop() {
 }
 
 routerstatus() {
-	DNSMASQ_PID=`pidof dnsmasq`
 	HOSTAPD_PID=`pidof hostapd`
-	SS_PID=`pidof ss-redir`
-	if [ -n "$DNSMASQ_PID" -a -n "$HOSTAPD_PID" -a -n "$SS_PID" ]; then
-		echo "> soft-router is running..."
-	fi
-	if [ -n "$DNSMASQ_PID" ]; then
-		echo "> dnsmasq is running at pid: $DNSMASQ_PID"
-	fi
 	if [ -n "$HOSTAPD_PID" ]; then
 		echo "> hostapd is running at pid: $HOSTAPD_PID"
 	fi
-	if [ -n "$SS_PID" ]; then
-		echo "> ss-redir is running at pid: $SS_PID"
-		echo "> shadowsocks mode: $ss_mode"
-	fi
-}
-
-dnsmasqcmd() {
-	case $1 in
-	restart|reload)
-	echo "> Reloading dnsmasq ..."
-	generate_user_gfwlist
-	`service dnsmasq restart`
-	echo "> OK"
-	;;
-	list)
-	echo "> User defined site list:"
-	echo ""
-	read_user_gfwlist
-	echo ""
-	;;
-	add)
-	if [ -z "$2" ]; then
-		echo "> Invalid arg: site name is required"
-		exit 1
-	fi
-	add_user_gfwlist $2
-	;;
-	remove|delete)
-	if [ -z "$2" ]; then
-		echo "> Invalid arg: site name is required"
-		exit 1
-	fi
-	remove_user_gfwlist $2
-	;;
-	*)
-	echo ""
-	echo "Usage: soft-router dnsmasq <action>"
-	echo "       soft-router dnsmasq reload      reload dnsmasq"
-	echo "       soft-router dnsmasq list        list user defined site list"
-	echo "       soft-router dnsmasq add         add a site"
-	echo "       soft-router dnsmasq remove      remove a site"
-	echo ""
-	;;
-	esac
-}
-
-ssstatus() {
-	SS_PID=`pidof ss-redir`
-	if [ -n "$SS_PID" ]; then
-		echo "> ss-redir is running at pid: $SS_PID"
-	fi
-	SST_PID=`pidof ss-tunnel`
-	if [ -n "$SST_PID" ]; then
-		echo "> ss-tunnel is running at pid: $SST_PID"
-	fi
-	if [ -n "$SS_PID" -a -n "$SST_PID" ]; then
-		echo "> shadowsocks mode: $ss_mode"
-	else
-		echo "> shadowsocks is not running"
-	fi
-	if [ "$KCPTUN" == "ON" ]; then
-		KCPTUN_PID=$(cat $KCP_CLIENT_PID_FILE)
-		if [ -n "$KCPTUN_PID" -a -d "/proc/$KCPTUN_PID" ]; then
-			echo "> kcptun is running at pid: $KCPTUN_PID"
-		else
-			echo "> kcptun is not running"
-		fi
-	fi
-}
-
-sscmd() {
-	case $1 in
-	start)
-	echo "> starting shadowsocks ..."
-	SS_PID=`pidof ss-redir`
-	if [ -n "$SS_PID" ]; then
-		echo "> ss-redir is already running at pid: $SS_PID"
-	else
-		startss
-		if [ "$ss_mode" = "none" ]; then
-			ss_mode="auto"
-		fi
-		setssmode $ss_mode
-		echo "> ss-redir start OK"
-	fi
-	SST_PID=$(pidof ss-tunnel)
-	if [ -n "$SST_PID" ]; then
-		echo "> ss-tunnel is already running at pid: $SST_PID"
-	else
-		startsst
-		echo "> ss-tunnel start OK"
-	fi
-	ssstatus
-	;;
-	stop)
-	echo "> stopping shadowsocks ..."
-	stopss
-	stopsst
-	setssmode none
-	echo "> OK"
-	;;
-	restart)
-	echo "> restarting shadowsocks ..."
-	SS_PID=`pidof ss-redir`
-	if [ -n "$SS_PID" ]; then
-		kill $SS_PID > /dev/null 2>&1
-	fi
-	SST_PID=$(pidof ss-tunnel)
-	if [ -n "$SST_PID" ]; then
-		kill $SST_PID > /dev/null 2>&1
-	fi
-	startss
-	startsst
-	setssmode $ss_mode
-	echo "> OK"
-	ssstatus
-	;;
-	status)
-	ssstatus
-	;;
-	global)
-	SS_PID=`pidof ss-redir`
-	if [ ! -n "$SS_PID" ]; then
-		echo "> starting shadowsocks ..."
-		startss
-		echo "> OK"
-	fi
-	ss_mode="global"
-	echo "> setting shadowsocks mode to $ss_mode ..."
-	setssmode $ss_mode
-	ssstatus
-	;;
-	auto)
-	SS_PID=`pidof ss-redir`
-	if [ ! -n "$SS_PID" ]; then
-		echo "> starting shadowsocks ..."
-		startss
-		echo "> OK"
-	fi
-	ss_mode="auto"
-	echo "> setting shadowsocks mode to $ss_mode ..."
-	setssmode $ss_mode
-	ssstatus
-	;;
-	up)
-	gfwlist2dnsmasq.sh -d 127.0.0.1 -p $SS_DNS_TUN_PORT -s $SS_IPSET_NAME -o $DNSMASQ_CONF_DIR/gfwlist.conf
-	dnsmasqcmd reload
-	;;
-	*)
-	echo ""
-	echo "Usage: soft-router ss <action>"
-	echo "       soft-router ss start		start shadowsocks"
-	echo "       soft-router ss stop		stop shadowsocks"
-	echo "       soft-router ss restart		restart shadowsocks"
-	echo "       soft-router ss status		show shadowsocks status"
-	echo "       soft-router ss global		switch shadowsocks to global mode"
-	echo "       soft-router ss auto		switch shadowsocks to auto mode (using gfwlist)"
-	echo "       soft-router ss up			update gfwlist"
-	echo ""
-	;;
-	esac
 }
 
 
@@ -534,24 +183,9 @@ OUTER_IF="eth0"
 BR_NAME="br-lan"
 # address of bridge
 BR_ADDR="192.168.8.1"
-# shadowsocks configure
-SS_LOCAL_PORT="1080"
-SS_ENCRYPT_METHOD="aes-256-cfb"
-# ipset 
-SS_IPSET_NAME="gfwlist"
-# dns forward port
-SS_DNS_TUN_PORT="30053"
-# dnsmasq configure file directory
-DNSMASQ_CONF_DIR=/etc/dnsmasq.d
 
 source ~/.soft-router/soft-router.conf
 
-
-# ss mode
-ss_mode=`readsession ss_rule`
-if [ ! -n "$ss_mode" ]; then
-	ss_mode="auto"
-fi
 
 case $1 in
 
@@ -576,25 +210,15 @@ routerstop
 routerstart
 ;;
 
-dnsmasq)
-dnsmasqcmd `subargs 2 $@`
-;;
-
-ss)
-sscmd `subargs 2 $@`
-;;
-
 *)
-echo "Soft router script V1.0	@by Loy B. <lonord@qq.com> (github.com/lonord)"
+echo "Soft router script V1.0   @by Loy B. <lonord@qq.com> (github.com/lonord)"
 echo ""
 echo "Usage: soft-router <command> [action]"
-echo "       soft-router check	check depedences"
-echo "       soft-router start	start router"
-echo "       soft-router stop	stop router"
-echo "       soft-router status	show router status"
-echo "       soft-router restart	restart router"
-echo "       soft-router dnsmasq	dnsmasq sub command"
-echo "       soft-router ss		shadowsocks sub command"
+echo "       soft-router check     check depedences"
+echo "       soft-router start     start router"
+echo "       soft-router stop      stop router"
+echo "       soft-router status    show router status"
+echo "       soft-router restart   restart router"
 echo ""
 ;;
 
