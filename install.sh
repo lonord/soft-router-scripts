@@ -13,7 +13,7 @@ fi
 cd "$( dirname "$0" )"
 
 echo -n "> Copying scripts to $OUT_DIR ... "
-cp scripts/soft-router scripts/gfwlist2dnsmasq.sh scripts/wpa_supplicant_pid.sh $OUT_DIR
+cp scripts/soft-router scripts/wpa_supplicant_pid.sh $OUT_DIR
 echo "OK"
 
 echo -n "> Create configure file ... "
