@@ -44,11 +44,13 @@ subargs() {
 }
 
 getwlanif() {
-	# find hostapd.conf
-	HOSTAPD_CONF=`cat /etc/init.d/hostapd | grep DAEMON_CONF= | cut -f2 -d =`
-	if [ -f $HOSTAPD_CONF ]; then
-		# find wlan interface name
-		echo `cat $HOSTAPD_CONF | grep interface= | cut -f2 -d =`
+	if [ -e /etc/init.d/hostapd ];then
+		# find hostapd.conf
+		HOSTAPD_CONF=`cat /etc/init.d/hostapd | grep DAEMON_CONF= | cut -f2 -d =`
+		if [ -f $HOSTAPD_CONF ]; then
+			# find wlan interface name
+			echo `cat $HOSTAPD_CONF | grep interface= | cut -f2 -d =`
+		fi
 	fi
 }
 
