@@ -119,11 +119,13 @@ checkdepedence() {
 routerstart() {
 	echo "> starting ..."
 
-	# stop exist process
-	echo "> stopping old process ..."
-	stopservice hostapd
-	# stop wpasupplicant which is using wlan interface
-	stopwpasupplicant
+	if [ -n "$ENABLE_HOSTAPD" ]; then
+		# stop exist process
+		echo "> stopping old process ..."
+		stopservice hostapd
+		# stop wpasupplicant which is using wlan interface
+		stopwpasupplicant
+	fi
 
 	# create bridge
 	echo "> creating bridge ..."
