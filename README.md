@@ -8,11 +8,8 @@
 
 - `brctl`
 - `dnsmasq`
-- `hostapd`
-- `ss-redir`
-- `ss-tunnel`
+- `hostapd` (可选)
 - `iptables`
-- `kcptun` [下载](https://github.com/xtaci/kcptun)后，将client_xxx_xxx文件名称改为kcp-client，并放到系统PATH下
 
 ### 配置dnsmasq
 
@@ -84,26 +81,8 @@ soft-router stop
 soft-router restart
 ```
 
-### 重启dnsmasq脚本
-
-```bash
-soft-router dnsmasq reload
-```
-
 ### 获取运行状态脚本
 
 ```bash
 soft-router status
-```
-
-### 切换shadowsocks运行状态/重启脚本
-
-```bash
-soft-router ss start		# start shadowsocks
-soft-router ss stop			# stop shadowsocks
-soft-router ss restart		# restart shadowsocks
-soft-router ss status		# show shadowsocks status
-soft-router ss global		# switch shadowsocks to global mode
-soft-router ss auto		# switch shadowsocks to auto mode (using gfwlist)
-soft-router ss up		# update gfwlist
 ```
