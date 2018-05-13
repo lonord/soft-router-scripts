@@ -100,7 +100,7 @@ createbridge() {
 setnatforward() {
 	rule="POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE"
 	iptables -t nat -A $rule
-	`savesession nat_rule $rule`
+	`savesession nat_rule "$rule"`
 }
 
 clearnatforward() {
@@ -160,9 +160,11 @@ routerstop() {
 	# delete bridge
 	echo "> deleting bridge ..."
 	delbridge $BR_NAME
-	# stop hostapd
-	echo "> stopping hostapd ..."
-	stopservice hostapd
+	if [ -n "$ENABLE_HOSTAPD" ]; then
+		# stop hostapd
+		echo "> stopping hostapd ..."
+		stopservice hostapd
+	fi
 
 	echo "> OK"
 }
