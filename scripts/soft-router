@@ -145,6 +145,7 @@ routerstart() {
 		brctl addif $BR_NAME $WLAN_IF
 	fi
 	# configure nat forward
+	clearnatforward
 	echo 1 > /proc/sys/net/ipv4/ip_forward
 	setnatforward
 
