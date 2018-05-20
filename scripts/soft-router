@@ -101,6 +101,14 @@ setnatforward() {
 	rule="POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE"
 	iptables -t nat -A $rule
 	`savesession nat_rule "$rule"`
+
+	rule_forward_s="FORWARD -s ${BR_ADDR%1}0/24 -j ACCEPT"
+	iptables -I $rule_forward_s
+	`savesession forward_rule_s "$rule_forward_s"`
+
+	rule_forward_d="FORWARD -d ${BR_ADDR%1}0/24 -j ACCEPT"
+	iptables -I $rule_forward_d
+	`savesession forward_rule_d "$rule_forward_d"`
 }
 
 clearnatforward() {
@@ -109,7 +117,18 @@ clearnatforward() {
 		iptables -t nat -D $rule
 		`deletesession nat_rule`
 	fi
-	iptables -t nat -D POSTROUTING -s ${BR_ADDR%1}0/24 -o $OUTER_IF -j MASQUERADE
+
+	rule_forward_s=`readsession forward_rule_s`
+	if [ -n "$rule_forward_s" ]; then
+		iptables -D $rule_forward_s
+		`deletesession forward_rule_s`
+	fi
+
+	rule_forward_d=`readsession forward_rule_d`
+	if [ -n "$rule_forward_d" ]; then
+		iptables -D $rule_forward_d
+		`deletesession forward_rule_d`
+	fi
 }
 
 checkdepedence() {
